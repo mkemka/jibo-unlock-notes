@@ -106,7 +106,11 @@ The hard work has been packaged into a single tool: [`JiboAutoMod`](https://gith
 | **Camera capture** | `/dev/video0` exposed via standard V4L2; ffmpeg can grab frames. |
 | **ROS-style WebSocket inspection** | `ws://<jibo-ip>:8282/{axis_state,axis_command,imu,touch,power,misc,led_state,led_command,faults}`. The body-service includes a built-in web UI at `http://<jibo-ip>:8282/` whose JS source documents the full message schemas — read `/usr/local/var/www/bodyservice/bs.js`. |
 
-A small Flask web UI driving most of these from a browser is straightforward to build. About 250 lines including HTML.
+A small Flask web UI driving most of these from a browser is straightforward to build. About 250 lines including HTML. Example layout:
+
+![Jibo Control web UI](images/jibo-control-ui.png)
+
+That's: an LED ring colour picker with presets, screen on/off, body indexing + emergency stop, head pose sliders (with torso disabled in this example because of a per-unit limit-switch fault), and a JSON output panel. Backend talks directly to the body-service over HTTP and WebSocket on `:8282`, and to `jibo-pose-body` / `jibo-index-body` over SSH.
 
 ## What you can't do without further effort
 
