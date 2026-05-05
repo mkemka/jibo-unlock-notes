@@ -112,6 +112,29 @@ A small Flask web UI driving most of these from a browser is straightforward to 
 
 That's: an LED ring colour picker with presets, screen on/off, body indexing + emergency stop, head pose sliders (with torso disabled in this example because of a per-unit limit-switch fault), and a JSON output panel. Backend talks directly to the body-service over HTTP and WebSocket on `:8282`, and to `jibo-pose-body` / `jibo-index-body` over SSH.
 
+### Closed-loop verification with a webcam
+
+Useful trick when you're driving Jibo headlessly: point any USB webcam at the unit (plug it into the Linux host you're SSHing from) and treat each capture as ground truth that the change actually rendered. The webcam path is just `ffmpeg -y -f v4l2 -i /dev/video0 -frames:v 1 -loglevel error /tmp/snap.jpg` — no special drivers, V4L2 ships with the kernel, runs as a user in the `video` group.
+
+The full feedback loop is:
+
+1. Backend SSHes to Jibo: pause `jibo-expression.js` with `SIGSTOP`, wake panel via `xset dpms force on`, run `xterm -fullscreen -fa Mono -fs 80 -bg "#000020" -fg "#ffffff" -e 'clear; printf "\n\n\n  %s\n" "yo dude"; sleep 12'`, then `SIGCONT` expression after the duration.
+2. After ~5 seconds (gives the LCD time to settle and the webcam time to auto-expose), backend grabs a frame from `/dev/video0`.
+3. Frame goes back to the browser. You can now visually confirm the text reached the panel — independent of any "the API said OK" reasoning.
+
+Captured frame from a real run that displayed `yo dude`:
+
+![Webcam-verified text on Jibo's display](images/webcam-yo-dude.jpg)
+
+The white block at the start is the xterm cursor; the text follows it. The cyan-ish glow at the top of the screen is webcam exposure rolloff, not the actual rendered colour — pick a darker background (`#000020` worked) so the camera doesn't blow out the highlights when it autosamples for the dim ambient light.
+
+A few practical notes from doing this end-to-end:
+
+- Capture *during* the display window, not after. The xterm script holds the screen for `$DURATION` seconds and then `SIGCONT`s expression — once expression is back, the green check overwrites your text within ~33 ms.
+- ffmpeg's first frame is usually pre-auto-exposure. If colours look wrong, capture 30 frames (`-frames:v 30 /tmp/cap-%03d.jpg`) and use the last one — that gives the camera AGC time to converge on the bright LCD.
+- Don't forget the `SIGCONT`. If your script crashes between `SIGSTOP` and `SIGCONT`, expression stays paused, the body-service idle-timer turns the panel off after ~5 minutes, and you're left with a black screen until you manually unfreeze. Wrap the expression-pause in a `trap` if you want belt-and-braces.
+- Same loop works to verify LED ring colour changes (point the camera at the ring around the body) and screen on/off transitions.
+
 ## What you can't do without further effort
 
 Anything that depends on Jibo's original cloud (which is offline):
